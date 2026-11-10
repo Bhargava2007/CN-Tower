@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tower A — WAN Riser Cross-Section</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#0a1120;
+    --bg2:#0d1830;
+    --grid:#16294a;
+    --ink:#dbe6f5;
+    --ink-dim:#7d92b3;
+    --wired:#f0a63d;     /* amber = wired/riser links */
+    --wireless:#3fd6d8;  /* cyan = wifi range */
+    --trunk:#b98af2;     /* violet = fiber trunk to core */
+    --backhaul:#ff4fa3;  /* magenta = wireless microwave backhaul (fiber failover) */
+    --danger:#f0a63d;
+    --line:#22375c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);font-family:'Inter',sans-serif;color:var(--ink);overflow:hidden;}
+
+  #scene{position:fixed;inset:0;}
+
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:5;
+    display:flex;align-items:baseline;gap:14px;
+    padding:16px 22px;
+    background:linear-gradient(180deg, rgba(10,17,32,0.95), rgba(10,17,32,0));
+    pointer-events:none;
+  }
+  header h1{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:15px;font-weight:600;letter-spacing:0.06em;
+    margin:0;color:var(--ink);text-transform:uppercase;
+  }
+  header span{font-size:12px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace;}
+
+  /* legend */
+  #legend{
+    position:fixed;top:16px;right:20px;z-index:5;
+    background:rgba(13,24,48,0.85);border:1px solid var(--line);
+    border-radius:6px;padding:10px 14px;font-size:11px;
+    font-family:'IBM Plex Mono',monospace;color:var(--ink-dim);
+    backdrop-filter:blur(6px);
+  }
+  #legend div{display:flex;align-items:center;gap:8px;margin:4px 0;}
+  #legend i{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;}
+
+  /* info card */
+  #info{
+    position:fixed;left:20px;bottom:22px;z-index:5;
+    width:300px;
+    background:rgba(13,24,48,0.92);border:1px solid var(--line);
+    border-radius:8px;padding:16px 18px;
+    backdrop-filter:blur(8px);
+    transition:border-color .25s;
+  }
+  #info .eyebrow{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;
+    color:var(--ink-dim);text-transform:uppercase;margin-bottom:4px;
+  }
+  #info h2{margin:0 0 10px;font-size:18px;font-weight:700;color:var(--ink);}
+  #info .row{
+    display:flex;justify-content:space-between;gap:10px;
+    font-size:12px;padding:5px 0;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  #info .row span:first-child{color:var(--ink-dim);}
+  #info .row span:last-child{color:var(--ink);text-align:right;}
+
+  /* riser slider rail */
+  #rail{
+    position:fixed;right:26px;top:50%;transform:translateY(-50%);
+    z-index:6;height:62vh;width:64px;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  #rail .cap{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-dim);letter-spacing:.1em;}
+  #rail .cap.top{margin-bottom:8px;}
+  #rail .cap.bottom{margin-top:8px;}
+  #railTrack{
+    position:relative;flex:1;width:100%;
+    cursor:ns-resize;
+  }
+  #trackLine{
+    position:absolute;left:50%;top:0;width:6px;height:100%;
+    transform:translateX(-50%);
+    background:linear-gradient(180deg, var(--wired) 0%, var(--wired) 91%, var(--trunk) 91%, var(--trunk) 100%);
+    border-radius:3px;
+    pointer-events:none;
+  }
+  #thumb{
+    position:absolute;left:50%;top:0;
+    width:34px;height:22px;
+    transform:translate(-50%,-50%);
+    background:var(--ink);border:2px solid var(--wired);
+    border-radius:5px;
+    box-shadow:0 0 12px rgba(240,166,61,0.6);
+    pointer-events:none;
+  }
+  #ticks{
+    position:absolute;left:50%;top:0;height:100%;width:0;
+    transform:translateX(6px);
+    pointer-events:none;
+  }
+  #ticks .tick{
+    position:absolute;left:0;transform:translateY(-50%);
+    font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ink-dim);white-space:nowrap;
+  }
+  #ticks .tick.active{color:var(--wired);font-weight:600;}
+
+  #hint{
+    position:fixed;bottom:22px;right:26px;z-index:5;
+    font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-dim);
+    text-align:right;max-width:180px;
+  }
+
+  /* control panel */
+  #controls{
+    position:fixed;top:64px;left:20px;z-index:6;
+    width:228px;
+    background:rgba(13,24,48,0.92);border:1px solid var(--line);
+    border-radius:8px;padding:12px 14px 14px;
+    backdrop-filter:blur(8px);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  #controls .ctlHead{
+    font-size:10px;letter-spacing:.14em;color:var(--ink-dim);text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  #controls label{
+    display:flex;align-items:center;gap:8px;
+    font-size:11.5px;color:var(--ink);
+    padding:4px 0;cursor:pointer;user-select:none;
+  }
+  #controls input[type=checkbox]{
+    appearance:none;-webkit-appearance:none;
+    width:13px;height:13px;border-radius:3px;
+    border:1.5px solid var(--ink-dim);background:transparent;
+    position:relative;flex:none;cursor:pointer;
+  }
+  #controls input[type=checkbox]:checked{
+    background:var(--wired);border-color:var(--wired);
+  }
+  #controls input[type=checkbox]:checked::after{
+    content:'';position:absolute;left:3px;top:0px;
+    width:3px;height:7px;border:solid #0a1120;border-width:0 2px 2px 0;
+    transform:rotate(45deg);
+  }
+  #failBtn{
+    width:100%;margin-top:10px;padding:8px 10px;
+    background:transparent;border:1.5px solid var(--danger);color:var(--danger);
+    border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+    letter-spacing:.04em;cursor:pointer;transition:.15s;
+  }
+  #failBtn:hover{background:rgba(240,166,61,0.12);}
+  #failBtn.active{
+    background:#e3475b;border-color:#e3475b;color:#fff;
+    box-shadow:0 0 14px rgba(227,71,91,0.55);
+  }
+  #campusHint{
+    display:none;margin-top:8px;font-size:10px;color:var(--ink-dim);line-height:1.4;
+  }
+  #campusHint.show{display:block;}
+
+  @media (max-width:760px){
+    #info{width:auto;right:20px;left:20px;}
+    #legend{display:none;}
+    #rail{right:8px;width:48px;}
+    #controls{width:180px;top:60px;left:10px;padding:10px 10px 12px;}
+    #controls label{font-size:10.5px;}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<header>
+  <h1 id="mainTitle">Tower A — Riser Cross-Section</h1>
+  <span>VIT-AP Employee Quarters · WAN Distribution Model · 5-Tower Campus</span>
+</header>
+
+<div id="legend">
+  <div><i style="background:var(--trunk)"></i>Fiber trunk (core → tower)</div>
+  <div><i style="background:var(--wired)"></i>Wired riser / Cat6 (switch → flat)</div>
+  <div><i style="background:var(--wireless)"></i>Wi‑Fi range (home router)</div>
+  <div><i style="background:var(--backhaul)"></i>Wireless backhaul (mmWave, auto‑failover)</div>
+  <div><i style="background:#e3475b"></i>Simulated link failure</div>
+  <div style="margin-top:6px;opacity:.8;font-size:10px;">Flat tag "703" = Floor 7, Unit 03</div>
+</div>
+
+<div id="controls">
+  <div class="ctlHead">Controls</div>
+  <label><input type="checkbox" id="chkCampus"> Campus view (5 towers)</label>
+  <label><input type="checkbox" id="chkPackets" checked> Packet flow animation</label>
+  <label><input type="checkbox" id="chkBandwidth"> Bandwidth labels</label>
+  <label><input type="checkbox" id="chkIP"> IP address overlay</label>
+  <label><input type="checkbox" id="chkWifi" checked> Wi‑Fi coverage</label>
+  <label><input type="checkbox" id="chkWired" checked> Wired links</label>
+  <label><input type="checkbox" id="chkBackhaul" checked> Wireless backhaul</label>
+  <button id="failBtn">⚠ Simulate link failure</button>
+  <div id="campusHint">Campus view is on — orbit/zoom still work; the riser rail is disabled while all 5 towers are shown.</div>
+</div>
+
+<div id="info">
+  <div id="failureBanner" style="display:none;background:rgba(227,71,91,0.18);border:1px solid #e3475b;border-radius:5px;padding:8px 10px;margin-bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#ff8a97;">⚠ SIMULATED FAILURE — Tower A ↔ Core fiber is down. Wireless microwave backhaul (magenta) auto‑engages in &lt;1s — all 100 flats stay online at reduced 1 Gbps capacity.</div>
+  <div class="eyebrow">Currently viewing</div>
+  <h2 id="infoTitle">—</h2>
+  <div class="row"><span>Link type</span><span id="infoLink">—</span></div>
+  <div class="row"><span>Distance to link above</span><span id="infoUp">—</span></div>
+  <div class="row"><span>Distance to link below</span><span id="infoDown">—</span></div>
+  <div class="row"><span>Coverage / range</span><span id="infoRange">—</span></div>
+  <div class="row"><span>Capacity</span><span id="infoCap">—</span></div>
+  <div class="row"><span>IP subnet</span><span id="infoIP">—</span></div>
+</div>
+
+<div id="rail">
+  <div class="cap top">FLOOR 10</div>
+  <div id="railTrack">
+    <div id="trackLine"></div>
+    <div id="ticks"></div>
+    <div id="thumb"></div>
+  </div>
+  <div class="cap bottom">ISP / CORE</div>
+</div>
+
+<div id="hint">Drag the rail to cut through floors.<br>Drag canvas to orbit · scroll to zoom.</div>
+
+<script>
+/* ---------- constants ---------- */
+const FLOOR_H   = 4;      // scene units per floor
+const REAL_FLOOR_H = 3.5; // metres per floor (real-world)
+const RING_R    = 7;      // scene units, flat ring radius
+const FLATS     = 10;
+const FLOORS    = 10;
+const GROUND_Y  = 0;
+const CORE_Y    = -9;
+
+/* campus (5-tower) layout */
+const TOWER_LETTERS = ['B','C','A','D','E'];     // display order left->right; A stays at scene origin (x=0,z=0)
+const CAMPUS_R  = 34;   // scene units, radius of the 4 non-A towers around the core
+const CAMPUS_H  = FLOOR_H*FLOORS; // simplified building block height
+
+/* levels: 0 = ISP/core, 1 = ground/tower router, 2..11 = floor 1..10 */
+function levelInfo(level){
+  if(level === 0){
+    return {
+      title:"Campus Core Router (NOC)",
+      link:"Single-mode fiber to ISP + rooftop mmWave backhaul radio",
+      up:"≈ 5 km to ISP hand-off",
+      down:"150 m fiber → Tower A Distribution Router (+ B–E) · wireless mmWave backhaul on standby to every tower",
+      range:"Backbone node — not user-facing",
+      cap:"25 Gbps peak demand → provisioned ~3–4 Gbps (1:8 contention)",
+      ip:"10.0.0.0/24 (core / NOC management)"
+    };
+  }
+  if(level === 1){
+    return {
+      title:"Tower A Distribution Router",
+      link:"10 Gbps fiber uplink (primary) + 1 Gbps mmWave backhaul (failover, auto‑switch <1s)",
+      up:"150 m fiber → Campus Core Router",
+      down:"Riser fiber to 10 floor switches (3.5 m / floor)",
+      range:"Serves whole tower — 100 flats, ≤ 500 devices",
+      cap:"100 flats × 50 Mbps = 5 Gbps guaranteed (10 Gbps link)",
+      ip:"10.1.0.0/16 (Tower A block)"
+    };
+  }
+  const floor = level - 1;
+  return {
+    title:"Floor " + floor + " Switch",
+    link:"Fiber/Cat6a riser",
+    up:(floor*REAL_FLOOR_H).toFixed(1)+" m riser → Tower Distribution Router",
+    down:"< 15 m Cat6 UTP → each of 10 home routers",
+    range:"Wired distribution ring ≈ 15 m radius",
+    cap:"10 flats × 50 Mbps = 500 Mbps (1 Gbps uplink) · 50 Mbps / flat",
+    ip:"10.1."+floor+".0/24"
+  };
+}
+
+/* ---------- three.js setup ---------- */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1120);
+scene.fog = new THREE.FogExp2(0x0a1120, 0.012);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 500);
+
+function resize(){
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* lights */
+scene.add(new THREE.AmbientLight(0x3a4d70, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(20,40,20);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x6f8fd6, 0.5);
+rim.position.set(-20,10,-15);
+scene.add(rim);
+
+/* ground grid, blueprint feel */
+const grid = new THREE.GridHelper(120, 40, 0x16294a, 0x16294a);
+grid.position.y = CORE_Y - 3;
+scene.add(grid);
+
+/* ---------- materials ---------- */
+function transMat(color, opacity){
+  return new THREE.MeshStandardMaterial({color, transparent:true, opacity, roughness:.6, metalness:.1, depthWrite:false});
+}
+function wireMat(color, opacity){
+  return new THREE.LineBasicMaterial({color, transparent:true, opacity});
+}
+function sphereMat(color, opacity){
+  return new THREE.MeshBasicMaterial({color, transparent:true, opacity, depthWrite:false});
+}
+
+const colTrunk    = 0xb98af2;
+const colWired    = 0xf0a63d;
+const colWifi     = 0x3fd6d8;
+const colBackhaul = 0xff4fa3; // wireless microwave/mmWave backhaul link
+const colSlab     = 0x274068;
+const colFlat     = 0x4c6ba3;
+
+/* ---------- label sprites ---------- */
+// Canvas text is measured and the canvas sized to fit BEFORE drawing, so
+// labels never get their edges cut off regardless of how long the text is.
+const LABEL_DPR = 2;              // supersample so text stays crisp at any zoom
+const LABEL_PAD_X = 26;           // horizontal padding (css px, pre-DPR)
+const LABEL_BASE_H = 64;          // base canvas height (css px, pre-DPR)
+const _measureCanvas = document.createElement('canvas');
+const _measureCtx = _measureCanvas.getContext('2d');
+
+function labelFont(fontPx){ return '600 '+fontPx+'px "IBM Plex Mono", monospace'; }
+
+// Draws `text` onto `spr`'s canvas, sizing the canvas to fit the text exactly
+// (with padding) so nothing is ever clipped. Reused both for initial creation
+// and for any later text updates (e.g. the live distance readout).
+function setLabelText(spr, text){
+  const { color, fontPx, worldHeight } = spr.userData;
+  const font = labelFont(fontPx * LABEL_DPR);
+  _measureCtx.font = font;
+  const textWidth = text ? _measureCtx.measureText(text).width : 0;
+  const padX = LABEL_PAD_X * LABEL_DPR;
+  const w = Math.max(Math.ceil(textWidth + padX * 2), Math.ceil(64 * LABEL_DPR));
+  const h = Math.ceil(LABEL_BASE_H * LABEL_DPR);
+
+  let c = spr.material.map ? spr.material.map.image : null;
+  if (!c) c = document.createElement('canvas');
+  c.width = w; c.height = h; // resizing implicitly clears the canvas
+  const ctx = c.getContext('2d');
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, h / 2);
+
+  if (!spr.material.map) {
+    spr.material.map = new THREE.CanvasTexture(c);
+  } else {
+    spr.material.map.needsUpdate = true;
+  }
+  const aspect = w / h;
+  spr.scale.set(worldHeight * aspect, worldHeight, 1);
+}
+
+// opts.height sets the in-scene text height (defaults match the old visual
+// hierarchy: 1.5 for titles, smaller for secondary/overlay info, smallest for
+// per-flat number tags). opts.fontPx lets a label render at a larger source
+// font size for extra sharpness if needed.
+function makeLabel(text, color, opts = {}){
+  const mat = new THREE.SpriteMaterial({ transparent: true, depthTest: false });
+  const spr = new THREE.Sprite(mat);
+  spr.renderOrder = 10;
+  spr.userData.color = color;
+  spr.userData.fontPx = opts.fontPx || 34;
+  spr.userData.worldHeight = opts.height || 1.5;
+  setLabelText(spr, text);
+  return spr;
+}
+
+/* ---------- overlay label registries (bandwidth / IP toggles) ---------- */
+const bandwidthLabels = []; // sprites shown only when "Bandwidth labels" is on
+const ipLabels = [];        // sprites shown only when "IP overlay" is on
+let showBandwidth = false, showIP = false, showWifi = true, showWired = true, showBackhaul = true;
+let showPackets = true, showCampus = false, failureMode = false;
+
+/* ---------- build core / ISP node ---------- */
+const coreGroup = new THREE.Group();
+const coreBox = new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,1.4,8), transMat(colTrunk,0.9));
+coreBox.position.y = CORE_Y;
+coreGroup.add(coreBox);
+const coreLabel = makeLabel('ISP / CORE', '#b98af2');
+coreLabel.position.set(0, CORE_Y+2.2, 0);
+coreGroup.add(coreLabel);
+scene.add(coreGroup);
+
+/* microwave/mmWave backhaul dish — core rooftop radio, aimed at Tower A */
+function makeDish(color){
+  const dish = new THREE.Group();
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.4, 16, 1, true), transMat(color, 0.95));
+  cone.rotation.x = Math.PI/2;
+  dish.add(cone);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.035, 8, 20), new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.95}));
+  rim.rotation.x = Math.PI/2;
+  dish.add(rim);
+  return dish;
+}
+const coreDish = makeDish(colBackhaul);
+coreDish.position.set(1.1, CORE_Y+1.6, 0.9);
+coreDish.lookAt(1.1, GROUND_Y, 0.9); // aim toward Tower A ground router
+coreGroup.add(coreDish);
+
+/* trunk line core -> ground */
+const trunkGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(0,CORE_Y,0), new THREE.Vector3(0,GROUND_Y,0)
+]);
+const trunkLine = new THREE.Line(trunkGeo, new THREE.LineDashedMaterial({color:colTrunk, dashSize:0.6, gapSize:0.4, transparent:true, opacity:0.9}));
+trunkLine.computeLineDistances();
+scene.add(trunkLine);
+const trunkLabel = makeLabel('150 m fiber', '#b98af2');
+trunkLabel.position.set(2.6, (CORE_Y+GROUND_Y)/2, 0);
+scene.add(trunkLabel);
+
+const trunkBwLabel = makeLabel('10 Gbps link', '#b98af2');
+trunkBwLabel.position.set(-2.8, (CORE_Y+GROUND_Y)/2, 0);
+trunkBwLabel.material.opacity = 0;
+scene.add(trunkBwLabel);
+bandwidthLabels.push(trunkBwLabel);
+
+const coreIPLabel = makeLabel('10.0.0.0/24', '#dbe6f5');
+coreIPLabel.position.set(0, CORE_Y-2.1, 0);
+coreIPLabel.material.opacity = 0;
+scene.add(coreIPLabel);
+ipLabels.push(coreIPLabel);
+
+const coreBwLabel = makeLabel('25G peak / ~3-4G prov.', '#b98af2', {height:1.05});
+coreBwLabel.position.set(0, CORE_Y+2.4, 0);
+coreBwLabel.material.opacity = 0;
+scene.add(coreBwLabel);
+bandwidthLabels.push(coreBwLabel);
+
+/* ---------- ground / tower distribution router ---------- */
+const groundGroup = new THREE.Group();
+const groundSlab = new THREE.Mesh(new THREE.CylinderGeometry(RING_R+3, RING_R+3, 0.6, 24), transMat(colSlab, 0.5));
+groundSlab.position.y = GROUND_Y;
+groundGroup.add(groundSlab);
+const towerRouter = new THREE.Mesh(new THREE.OctahedronGeometry(1.3,0), transMat(colTrunk, 1));
+towerRouter.position.y = GROUND_Y + 1.2;
+groundGroup.add(towerRouter);
+const groundLabel = makeLabel('TOWER ROUTER', '#b98af2');
+groundLabel.position.set(0, GROUND_Y+3.2, 0);
+groundGroup.add(groundLabel);
+scene.add(groundGroup);
+
+/* Tower A backhaul dish, mounted on the rooftop mast, aimed back at the core */
+const towerADish = makeDish(colBackhaul);
+towerADish.position.set(1.1, GROUND_Y+2.0, 0.9);
+towerADish.lookAt(1.1, CORE_Y, 0.9);
+groundGroup.add(towerADish);
+const backhaulTagLabel = makeLabel('mmWave radio', '#ff4fa3', {height:0.8});
+backhaulTagLabel.position.set(1.1, GROUND_Y+3.0, 0.9);
+groundGroup.add(backhaulTagLabel);
+
+const groundIPLabel = makeLabel('10.1.0.0/16', '#dbe6f5');
+groundIPLabel.position.set(3.4, GROUND_Y+1.2, 0);
+groundIPLabel.material.opacity = 0;
+scene.add(groundIPLabel);
+ipLabels.push(groundIPLabel);
+
+/* ---------- riser (vertical fiber shaft) ---------- */
+const riserGeo = new THREE.CylinderGeometry(0.12,0.12, FLOOR_H*FLOORS, 8, 1);
+const riserMat = new THREE.MeshBasicMaterial({color:colTrunk, transparent:true, opacity:0.85});
+const riser = new THREE.Mesh(riserGeo, riserMat);
+riser.position.y = GROUND_Y + (FLOOR_H*FLOORS)/2;
+scene.add(riser);
+
+/* ---------- floors ---------- */
+const floorGroups = []; // index 1..10
+for(let f=1; f<=FLOORS; f++){
+  const y = GROUND_Y + f*FLOOR_H;
+  const g = new THREE.Group();
+  g.userData = {opacity:1, targetOpacity:1, floor:f};
+
+  const slabMat = transMat(colSlab, 0.55);
+  const slab = new THREE.Mesh(new THREE.CylinderGeometry(RING_R+3, RING_R+3, 0.4, 24), slabMat);
+  slab.position.y = y;
+  g.add(slab);
+  g.userData.slabMat = slabMat;
+
+  // floor switch at center
+  const swMat = transMat(colWired, 1);
+  const sw = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), swMat);
+  sw.position.set(0, y+0.9, 0);
+  g.add(sw);
+  g.userData.swMat = swMat;
+
+  // floor number + switch label, always visible in-scene (not just the side panel)
+  const floorLabel = makeLabel('FLOOR '+f+' SWITCH', '#f0a63d');
+  floorLabel.position.set(0, y+2.6, 0);
+  g.add(floorLabel);
+  g.userData.floorLabelMat = floorLabel.material;
+
+  // bandwidth label (toggle) — 500 Mbps/floor + 50 Mbps/flat, per improvements spec
+  const floorBwLabel = makeLabel('500 Mbps · 50/flat', '#f0a63d', {height:0.8});
+  floorBwLabel.position.set(0, y+3.35, 0);
+  g.add(floorBwLabel);
+  g.userData.bwMat = floorBwLabel.material;
+
+  // IP overlay label (toggle) — 10.1.<floor>.0/24
+  const floorIPLabel = makeLabel('10.1.'+f+'.0/24', '#dbe6f5');
+  floorIPLabel.position.set(3.6, y+0.9, 0);
+  g.add(floorIPLabel);
+  g.userData.ipMat = floorIPLabel.material;
+
+  // wired coverage ring (dashed torus)
+  const ringGeo = new THREE.BufferGeometry();
+  const pts = [];
+  for(let a=0;a<=64;a++){
+    const th = (a/64)*Math.PI*2;
+    pts.push(new THREE.Vector3(Math.cos(th)*(RING_R+2), y+0.05, Math.sin(th)*(RING_R+2)));
+  }
+  ringGeo.setFromPoints(pts);
+  const ringMat = new THREE.LineDashedMaterial({color:colWired, dashSize:0.8, gapSize:0.5, transparent:true, opacity:0.8});
+  const ring = new THREE.Line(ringGeo, ringMat);
+  ring.computeLineDistances();
+  g.add(ring);
+  g.userData.ringMat = ringMat;
+
+  // flats + home routers arranged in a ring
+  const flatMats = [], rangeMats = [], cableMats = [], labelMats = [];
+  for(let i=0;i<FLATS;i++){
+    const a = (i/FLATS)*Math.PI*2;
+    const fx = Math.cos(a)*RING_R, fz = Math.sin(a)*RING_R;
+
+    // flat room outline
+    const flatMat = new THREE.MeshBasicMaterial({color:colFlat, wireframe:true, transparent:true, opacity:0.7});
+    const flat = new THREE.Mesh(new THREE.BoxGeometry(2.6,1.8,2.6), flatMat);
+    flat.position.set(fx, y+1.1, fz);
+    g.add(flat); flatMats.push(flatMat);
+
+    // cable run switch -> flat
+    const cableGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0,y+0.6,0), new THREE.Vector3(fx,y+0.6,fz)
+    ]);
+    const cableMat = new THREE.LineBasicMaterial({color:colWired, transparent:true, opacity:0.55});
+    const cable = new THREE.Line(cableGeo, cableMat);
+    g.add(cable); cableMats.push(cableMat);
+
+    // home router (hall placement, offset toward center)
+    const routerMat = new THREE.MeshBasicMaterial({color:colWifi, transparent:true, opacity:1});
+    const router = new THREE.Mesh(new THREE.SphereGeometry(0.22,10,10), routerMat);
+    const hx = fx*0.62, hz = fz*0.62;
+    router.position.set(hx, y+1.0, hz);
+    g.add(router);
+
+    // wifi range sphere
+    const rangeMat = sphereMat(colWifi, 0.08);
+    const range = new THREE.Mesh(new THREE.SphereGeometry(2.4,16,16), rangeMat);
+    range.position.copy(router.position);
+    g.add(range); rangeMats.push(rangeMat);
+
+    // flat number label, e.g. "703" = Floor 7, Unit 03 (so a specific home router can be pointed to)
+    const flatNo = ''+f+String(i+1).padStart(2,'0');
+    const flatLabel = makeLabel(flatNo, '#dbe6f5', {height:0.65});
+    flatLabel.position.set(hx, y+1.7, hz);
+    g.add(flatLabel);
+    labelMats.push(flatLabel.material);
+  }
+  g.userData.flatMats = flatMats;
+  g.userData.rangeMats = rangeMats;
+  g.userData.cableMats = cableMats;
+  g.userData.labelMats = labelMats;
+
+  scene.add(g);
+  floorGroups.push(g);
+}
+
+/* riser distance label + dynamic dashed indicator from ground to selected floor */
+const focusLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,0)]);
+const focusLineMat = new THREE.LineDashedMaterial({color:0xffffff, dashSize:0.6, gapSize:0.35, transparent:true, opacity:0.9});
+const focusLine = new THREE.Line(focusLineGeo, focusLineMat);
+scene.add(focusLine);
+const focusLabel = makeLabel('', '#ffffff');
+scene.add(focusLabel);
+
+/* ---------- campus view: simplified Towers B–E fanned around the core ---------- */
+const CAMPUS_SPACING = 15.5;
+const CAMPUS_Z = -17;
+const campusOffsets = { B:-2, C:-1, D:1, E:2 };
+const campusGroups = [];
+const campusBackhaulMats = [];
+const IP_BLOCK = { B:'10.2.0.0/16', C:'10.3.0.0/16', D:'10.4.0.0/16', E:'10.5.0.0/16' };
+
+Object.keys(campusOffsets).forEach(letter=>{
+  const tx = campusOffsets[letter]*CAMPUS_SPACING;
+  const tz = CAMPUS_Z;
+  const grp = new THREE.Group();
+
+  // simplified building silhouette
+  const bMat = transMat(colFlat, 0.35);
+  const bldg = new THREE.Mesh(new THREE.BoxGeometry(RING_R*1.5, CAMPUS_H, RING_R*1.5), bMat);
+  bldg.position.set(tx, GROUND_Y+CAMPUS_H/2, tz);
+  grp.add(bldg);
+
+  // ground router node
+  const rMat = transMat(colTrunk, 1);
+  const router = new THREE.Mesh(new THREE.OctahedronGeometry(1.1,0), rMat);
+  router.position.set(tx, GROUND_Y+1.2, tz);
+  grp.add(router);
+
+  // tower name label
+  const nameLabel = makeLabel('TOWER '+letter, '#dbe6f5');
+  nameLabel.position.set(tx, GROUND_Y+CAMPUS_H+1.6, tz);
+  grp.add(nameLabel);
+
+  // bandwidth label (toggle)
+  const bwLabel = makeLabel('5 Gbps · 10G link', '#b98af2', {height:0.9});
+  bwLabel.position.set(tx, GROUND_Y+3.0, tz);
+  bwLabel.material.opacity = 0;
+  grp.add(bwLabel);
+  bandwidthLabels.push(bwLabel);
+
+  // IP label (toggle)
+  const ipLabel = makeLabel(IP_BLOCK[letter], '#dbe6f5');
+  ipLabel.position.set(tx+2.6, GROUND_Y+1.2, tz);
+  ipLabel.material.opacity = 0;
+  grp.add(ipLabel);
+  ipLabels.push(ipLabel);
+
+  // fiber trunk from core to this tower's ground router
+  const fiberGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0,CORE_Y,0), new THREE.Vector3(tx,GROUND_Y,tz)
+  ]);
+  const fiberMat = new THREE.LineDashedMaterial({color:colTrunk, dashSize:0.6, gapSize:0.4, transparent:true, opacity:0.75});
+  const fiberLine = new THREE.Line(fiberGeo, fiberMat);
+  fiberLine.computeLineDistances();
+  grp.add(fiberLine);
+
+  // wireless mmWave backhaul, standby failover for this tower too — every tower in the
+  // campus gets the same dual-path resilience as Tower A, not just the flagship building
+  const bhTx = tx*0.985, bhTz = tz+1.1; // slight offset so it's visually distinct from the fiber line
+  const bhGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0,CORE_Y+1.6,0.9), new THREE.Vector3(bhTx,GROUND_Y+2.0,bhTz)
+  ]);
+  const bhMat = new THREE.LineDashedMaterial({color:colBackhaul, dashSize:0.4, gapSize:0.3, transparent:true, opacity:0});
+  const bhLine = new THREE.Line(bhGeo, bhMat);
+  bhLine.computeLineDistances();
+  grp.add(bhLine);
+  campusBackhaulMats.push(bhMat);
+
+  const dish = makeDish(colBackhaul);
+  dish.position.set(bhTx, GROUND_Y+2.0, bhTz);
+  dish.lookAt(0, CORE_Y+1.6, 0.9);
+  grp.add(dish);
+
+  grp.visible = false;
+  scene.add(grp);
+  campusGroups.push({group:grp, routerPos:new THREE.Vector3(tx,GROUND_Y,tz), letter});
+});
+
+// Tower A highlight ring (campus view only) — marks the fully-detailed tower
+const highlightRingGeo = new THREE.BufferGeometry();
+{
+  const pts = [];
+  for(let a=0;a<=64;a++){ const th=(a/64)*Math.PI*2; pts.push(new THREE.Vector3(Math.cos(th)*(RING_R+4.2), GROUND_Y-0.3, Math.sin(th)*(RING_R+4.2))); }
+  highlightRingGeo.setFromPoints(pts);
+}
+const highlightRingMat = new THREE.LineBasicMaterial({color:0xf0a63d, transparent:true, opacity:0});
+const highlightRing = new THREE.Line(highlightRingGeo, highlightRingMat);
+scene.add(highlightRing);
+const towerALabel2 = makeLabel('TOWER A — DETAILED VIEW', '#f0a63d');
+towerALabel2.position.set(0, GROUND_Y+CAMPUS_H+2.6, 0);
+towerALabel2.material.opacity = 0;
+scene.add(towerALabel2);
+
+/* ---------- wireless backhaul + failure simulation visuals ---------- */
+// dish-to-dish wireless microwave/mmWave backhaul, core -> Tower A (offset so it reads
+// as a distinct path next to the fiber trunk). Always present at low "standby" opacity;
+// brightens and pulses when the fiber trunk fails, i.e. real automatic failover, not
+// just a suggestion.
+const BH_A = new THREE.Vector3(1.1, CORE_Y+1.6, 0.9);
+const BH_B = new THREE.Vector3(1.1, GROUND_Y+2.0, 0.9);
+const backhaulGeo = new THREE.BufferGeometry().setFromPoints([BH_A, BH_B]);
+const backhaulMat = new THREE.LineDashedMaterial({color:colBackhaul, dashSize:0.4, gapSize:0.28, transparent:true, opacity:0});
+const backhaulLine = new THREE.Line(backhaulGeo, backhaulMat);
+backhaulLine.computeLineDistances();
+scene.add(backhaulLine);
+const backhaulLabel = makeLabel('Wireless backhaul — standby', '#ff4fa3', {height:1.05});
+backhaulLabel.position.set(3.0, (CORE_Y+GROUND_Y)/2 - 1, 0.9);
+backhaulLabel.material.opacity = 0;
+scene.add(backhaulLabel);
+
+const offlineLabel = makeLabel('TOWER A — LINK DOWN', '#e3475b', {height:1.25});
+offlineLabel.position.set(0, GROUND_Y+FLOOR_H*FLOORS+3.6, 0);
+offlineLabel.material.opacity = 0;
+scene.add(offlineLabel);
+
+/* ---------- packet-flow animation ---------- */
+const packets = [];
+function addPacket(color, speed, visibleFn){
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8), new THREE.MeshBasicMaterial({color}));
+  mesh.visible = false;
+  scene.add(mesh);
+  const pk = {mesh, t:Math.random(), speed, visibleFn};
+  packets.push(pk);
+  return pk;
+}
+// core -> Tower A ground router (ISP/Core -> Tower)
+const pkTrunkA = addPacket(0xb98af2, 0.012, ()=> !failureMode);
+// core -> each campus tower (only relevant in campus view)
+const pkCampus = {};
+campusGroups.forEach(t=>{ pkCampus[t.letter] = addPacket(0xb98af2, 0.010+Math.random()*0.006, ()=> showCampus); });
+// ground -> top of riser (Tower -> Floor), continuous climb
+const pkRiser = addPacket(0xf0a63d, 0.008, ()=> !failureMode);
+// wireless backhaul dish -> dish, only actively carrying traffic once the fiber trunk fails over
+const pkBackhaul = addPacket(colBackhaul, 0.018, ()=> failureMode && showBackhaul);
+
+function updatePackets(){
+  packets.forEach(pk=>{
+    const vis = showPackets && (pk.visibleFn ? pk.visibleFn() : true);
+    pk.mesh.visible = vis;
+    if(!vis) return;
+    pk.t += pk.speed;
+    if(pk.t>1) pk.t -= 1;
+  });
+  pkTrunkA.mesh.position.lerpVectors(new THREE.Vector3(0,CORE_Y,0), new THREE.Vector3(0,GROUND_Y,0), pkTrunkA.t);
+  campusGroups.forEach(t=>{
+    const pk = pkCampus[t.letter];
+    pk.mesh.position.lerpVectors(new THREE.Vector3(0,CORE_Y,0), t.routerPos, pk.t);
+  });
+  pkRiser.mesh.position.lerpVectors(new THREE.Vector3(0,GROUND_Y,0), new THREE.Vector3(0,GROUND_Y+FLOOR_H*FLOORS,0), pkRiser.t);
+  pkBackhaul.mesh.position.lerpVectors(BH_A, BH_B, pkBackhaul.t);
+}
+
+// floor -> home packet (Floor -> Home), follows whichever floor is currently focused
+const floorPacketMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15,8,8), new THREE.MeshBasicMaterial({color:0x3fd6d8}));
+floorPacketMesh.visible = false;
+scene.add(floorPacketMesh);
+let floorPacketT = 0, floorPacketFlatIdx = 0, floorPacketDir = 1;
+function updateFloorPacket(){
+  const onFloor = currentLevel>=2 && currentLevel<=11;
+  const vis = showPackets && onFloor && !showCampus && !failureMode;
+  floorPacketMesh.visible = vis;
+  if(!vis) return;
+  const f = currentLevel-1;
+  const y = GROUND_Y + f*FLOOR_H;
+  const a = (floorPacketFlatIdx/FLATS)*Math.PI*2;
+  const fx = Math.cos(a)*RING_R, fz = Math.sin(a)*RING_R;
+  const switchPos = new THREE.Vector3(0,y+0.6,0);
+  const flatPos = new THREE.Vector3(fx*0.62,y+1.0,fz*0.62);
+  floorPacketT += 0.022;
+  if(floorPacketT>=1){
+    floorPacketT = 0;
+    floorPacketDir *= -1;
+    if(floorPacketDir===1) floorPacketFlatIdx = (floorPacketFlatIdx+1)%FLATS;
+  }
+  const from = floorPacketDir===1 ? switchPos : flatPos;
+  const to = floorPacketDir===1 ? flatPos : switchPos;
+  floorPacketMesh.position.lerpVectors(from,to,floorPacketT);
+}
+
+/* ---------- camera controls (custom orbit) ---------- */
+let theta = Math.PI*0.28, phi = 1.05, radius = 34;
+let camRadius = radius;
+let targetY = GROUND_Y + 5*FLOOR_H;
+let camTargetY = targetY;
+const target = new THREE.Vector3(0, targetY, 0);
+
+let dragging = false, lastX=0, lastY=0;
+canvas.addEventListener('pointerdown', e=>{dragging=true; lastX=e.clientX; lastY=e.clientY; canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerup', e=>{dragging=false;});
+canvas.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const dx = e.clientX-lastX, dy = e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  theta -= dx*0.006;
+  phi = Math.min(Math.max(phi - dy*0.006, 0.25), 1.5);
+});
+canvas.addEventListener('wheel', e=>{
+  const maxR = showCampus ? 95 : 60;
+  radius = Math.min(Math.max(radius + e.deltaY*0.02, 14), maxR);
+  e.preventDefault();
+}, {passive:false});
+
+function updateCamera(){
+  camTargetY += (targetY - camTargetY)*0.08;
+  camRadius += (radius - camRadius)*0.08;
+  target.set(0, camTargetY, 0);
+  const x = target.x + camRadius*Math.sin(phi)*Math.sin(theta);
+  const z = target.z + camRadius*Math.sin(phi)*Math.cos(theta);
+  const y = target.y + camRadius*Math.cos(phi);
+  camera.position.set(x,y,z);
+  camera.lookAt(target);
+}
+
+/* ---------- slider / level logic ---------- */
+const track = document.getElementById('railTrack');
+const thumb = document.getElementById('thumb');
+const ticksEl = document.getElementById('ticks');
+const infoTitle = document.getElementById('infoTitle');
+const infoLink = document.getElementById('infoLink');
+const infoUp = document.getElementById('infoUp');
+const infoDown = document.getElementById('infoDown');
+const infoRange = document.getElementById('infoRange');
+const infoCap = document.getElementById('infoCap');
+const infoIP = document.getElementById('infoIP');
+
+const MAX_LEVEL = 11; // Floor 10 (top of rail)
+const MIN_LEVEL = 0;  // ISP/Core (bottom of rail)
+
+// percentage from the TOP of the track for a given level: level 11 -> 0%, level 0 -> 100%
+function levelToTopPct(lvl){ return (1 - lvl / MAX_LEVEL) * 100; }
+
+/* build tick labels, positioned top-to-bottom so they always agree with the FLOOR 10 / ISP-CORE caps */
+for(let lvl = MAX_LEVEL; lvl >= MIN_LEVEL; lvl--){
+  const div = document.createElement('div');
+  div.className = 'tick';
+  div.dataset.lvl = lvl;
+  div.textContent = lvl===0 ? 'CORE' : (lvl===1 ? 'GND' : 'F'+(lvl-1));
+  div.style.top = levelToTopPct(lvl) + '%';
+  ticksEl.appendChild(div);
+}
+
+function placeThumb(level){
+  thumb.style.top = levelToTopPct(level) + '%';
+}
+
+function levelFromClientY(clientY){
+  const rect = track.getBoundingClientRect();
+  let relY = (clientY - rect.top) / rect.height; // 0 at top, 1 at bottom
+  relY = Math.min(Math.max(relY, 0), 1);
+  return Math.round((1 - relY) * MAX_LEVEL); // top -> MAX_LEVEL, bottom -> MIN_LEVEL
+}
+
+function setLevel(level){
+  level = +level;
+  // camera focus
+  if(level===0) targetY = CORE_Y;
+  else if(level===1) targetY = GROUND_Y + 2;
+  else targetY = GROUND_Y + (level-1)*FLOOR_H + 1;
+  radius = level<=1 ? 40 : 24;
+
+  // fade floors: above current -> ghost, current -> full+highlight, below -> dimmed
+  const curFloor = level>=2 ? level-1 : (level===1 ? 0 : -1);
+  floorGroups.forEach(g=>{
+    const f = g.userData.floor;
+    let op;
+    if(curFloor<0){ op = 0.5; }
+    else if(f > curFloor) op = 0.05;
+    else if(f === curFloor) op = 1;
+    else op = 0.35;
+    g.userData.targetOpacity = op;
+  });
+
+  // focus line: ground(or core) -> selected level
+  let fromY, toY;
+  if(level===0){ fromY = null; }
+  else if(level===1){ fromY = CORE_Y; toY = GROUND_Y; }
+  else { fromY = GROUND_Y; toY = GROUND_Y + (level-1)*FLOOR_H; }
+  if(fromY!==null){
+    focusLine.visible = true;
+    const pos = focusLine.geometry.attributes.position;
+    pos.setXYZ(0,0,fromY,0);
+    pos.setXYZ(1,0,toY,0);
+    pos.needsUpdate = true;
+    focusLine.computeLineDistances();
+    const distTxt = level===1 ? '150 m' : ((level-1)*REAL_FLOOR_H).toFixed(1)+' m';
+    focusLabel.visible = true;
+    focusLabel.position.set(3.4, (fromY+toY)/2, 0);
+    setLabelText(focusLabel, distTxt);
+  } else {
+    focusLine.visible = false;
+    focusLabel.visible = false;
+  }
+
+  // info panel
+  const info = levelInfo(level);
+  infoTitle.textContent = info.title;
+  infoLink.textContent = info.link;
+  infoUp.textContent = info.up;
+  infoDown.textContent = info.down;
+  infoRange.textContent = info.range;
+  infoCap.textContent = info.cap;
+  infoIP.textContent = info.ip;
+
+  // ticks highlight
+  [...ticksEl.children].forEach(t=> t.classList.toggle('active', +t.dataset.lvl===level));
+
+  if(showCampus){ targetY = GROUND_Y + CAMPUS_H*0.42; radius = 82; }
+}
+
+let currentLevel = 6;
+let railDragging = false;
+
+function updateFromPointer(e){
+  if(showCampus) return;
+  const lvl = levelFromClientY(e.clientY);
+  if(lvl !== currentLevel){
+    currentLevel = lvl;
+    setLevel(currentLevel);
+  }
+  placeThumb(currentLevel);
+}
+
+track.addEventListener('pointerdown', e=>{
+  if(showCampus) return;
+  railDragging = true;
+  track.setPointerCapture(e.pointerId);
+  updateFromPointer(e);
+});
+track.addEventListener('pointermove', e=>{
+  if(!railDragging) return;
+  updateFromPointer(e);
+});
+track.addEventListener('pointerup', ()=>{ railDragging = false; });
+track.addEventListener('pointercancel', ()=>{ railDragging = false; });
+
+placeThumb(currentLevel);
+setLevel(currentLevel);
+
+/* ---------- control panel wiring ---------- */
+const railEl = document.getElementById('rail');
+const campusHintEl = document.getElementById('campusHint');
+const mainTitleEl = document.getElementById('mainTitle');
+const failureBannerEl = document.getElementById('failureBanner');
+let highlightTarget = 0, failureTarget = 0;
+
+function setCampusMode(on){
+  showCampus = on;
+  campusGroups.forEach(t=> t.group.visible = on);
+  highlightTarget = on ? 0.9 : 0;
+  railEl.style.opacity = on ? 0.35 : 1;
+  railEl.style.pointerEvents = on ? 'none' : 'auto';
+  campusHintEl.classList.toggle('show', on);
+  mainTitleEl.textContent = on ? 'Campus View — 5 Towers' : 'Tower A — Riser Cross-Section';
+  if(on){ targetY = GROUND_Y + CAMPUS_H*0.42; radius = 82; }
+  else { setLevel(currentLevel); }
+}
+
+function setFailureMode(on){
+  failureMode = on;
+  failureTarget = on ? 1 : 0;
+  failBtn.classList.toggle('active', on);
+  failBtn.textContent = on ? '✓ Failure simulated — click to restore' : '⚠ Simulate link failure';
+  failureBannerEl.style.display = on ? 'block' : 'none';
+  setLabelText(backhaulLabel, on ? 'Wireless backhaul — ACTIVE (1 Gbps)' : 'Wireless backhaul — standby');
+  // force Tower A floors to read as offline regardless of current slider position
+  floorGroups.forEach(g=>{ g.userData.targetOpacity = on ? Math.min(g.userData.targetOpacity, 0.3) : g.userData.targetOpacity; });
+  if(on) setLevel(currentLevel); // recompute floor opacities cleanly, fd multiplier in applyOpacity handles the rest
+}
+
+document.getElementById('chkCampus').addEventListener('change', e=> setCampusMode(e.target.checked));
+document.getElementById('chkPackets').addEventListener('change', e=> showPackets = e.target.checked);
+document.getElementById('chkBandwidth').addEventListener('change', e=>{
+  showBandwidth = e.target.checked;
+  bandwidthLabels.forEach(s=> s.material.opacity = showBandwidth ? 1 : 0);
+});
+document.getElementById('chkIP').addEventListener('change', e=>{
+  showIP = e.target.checked;
+  ipLabels.forEach(s=> s.material.opacity = showIP ? 1 : 0);
+});
+document.getElementById('chkWifi').addEventListener('change', e=> showWifi = e.target.checked);
+document.getElementById('chkWired').addEventListener('change', e=> showWired = e.target.checked);
+document.getElementById('chkBackhaul').addEventListener('change', e=> showBackhaul = e.target.checked);
+const failBtn = document.getElementById('failBtn');
+failBtn.addEventListener('click', ()=> setFailureMode(!failureMode));
+
+/* ---------- animation loop: lerp opacities ---------- */
+function applyOpacity(g){
+  const cur = g.userData.opacity += (g.userData.targetOpacity - g.userData.opacity)*0.12;
+  const fd = failureMode ? 0.10 : 1; // Tower A floors go dark during simulated outage
+  g.userData.slabMat.opacity = (0.15 + cur*0.4) * fd;
+  g.userData.swMat.opacity = Math.max(cur,0.15) * fd;
+  g.userData.swMat.color.set(failureMode ? 0xe3475b : colWired);
+  g.userData.ringMat.opacity = cur*0.8 * (showWired?1:0) * fd;
+  g.userData.flatMats.forEach(m=> m.opacity = cur*0.7 * fd);
+  g.userData.cableMats.forEach(m=> m.opacity = cur*0.55 * (showWired?1:0) * fd);
+  g.userData.rangeMats.forEach(m=> m.opacity = cur*0.10 * (showWifi?1:0) * fd);
+  g.userData.floorLabelMat.opacity = Math.max(cur, 0.12) * fd;
+  g.userData.labelMats.forEach(m=> m.opacity = Math.max(cur*0.9, 0.1) * fd);
+  g.userData.bwMat.opacity = showBandwidth ? Math.max(cur*0.85,0.15)*fd : 0;
+  g.userData.ipMat.opacity = showIP ? Math.max(cur*0.85,0.15)*fd : 0;
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  updateCamera();
+  floorGroups.forEach(applyOpacity);
+  updatePackets();
+  updateFloorPacket();
+
+  // campus highlight ring / label fade
+  highlightRingMat.opacity += (highlightTarget - highlightRingMat.opacity)*0.1;
+  towerALabel2.material.opacity = highlightRingMat.opacity;
+
+  // wireless backhaul: dim standby line when idle, bright pulsing "carrying live traffic"
+  // line the instant the fiber trunk fails — real automatic failover, not just a suggestion
+  const bhStandby = showBackhaul ? 0.35 : 0;
+  const bhPulse = 0.55 + 0.45*Math.sin(performance.now()*0.008);
+  const bhTargetOpacity = showBackhaul ? (failureMode ? bhPulse : bhStandby) : 0;
+  backhaulMat.opacity += (bhTargetOpacity - backhaulMat.opacity)*0.15;
+  backhaulLabel.material.opacity = showBackhaul ? Math.max(backhaulMat.opacity, failureTarget*0.9) : 0;
+  coreDish.children[0].material.opacity = showBackhaul ? (failureMode ? 1 : 0.6) : 0.15;
+  towerADish.children[0].material.opacity = coreDish.children[0].material.opacity;
+  campusBackhaulMats.forEach(m=> m.opacity += ((showBackhaul && showCampus ? 0.4 : 0) - m.opacity)*0.12);
+
+  offlineLabel.material.opacity += (failureTarget - offlineLabel.material.opacity)*0.1;
+  if(failureMode){
+    const pulse = 0.55 + 0.45*Math.sin(performance.now()*0.006);
+    trunkLine.material.color.set(0xe3475b);
+    trunkLine.material.opacity = pulse;
+    towerRouter.material.color.set(0xe3475b);
+  } else {
+    trunkLine.material.color.set(colTrunk);
+    trunkLine.material.opacity = 0.9;
+    towerRouter.material.color.set(colTrunk);
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
